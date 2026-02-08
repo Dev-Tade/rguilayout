@@ -608,6 +608,9 @@ static void WriteConstText(char *toolstr, int *pos, GuiLayout *layout, GuiLayout
             case GUI_SCROLLPANEL:
             case GUI_COLORPICKER:
             {
+                // Skip constant text for elements with no text
+                if (layout->controls[i].text[0] == '\0') continue;
+
                 TextAppend(toolstr, TextFormat("const char *%sText = \"%s\";", layout->controls[i].name, layout->controls[i].text), pos);
                 if (config.fullComments)
                 {
@@ -1085,7 +1088,12 @@ static char *GetControlTextParam(GuiLayoutControl control, bool defineText)
     static char text[512];
     memset(text, 0, 512);
 
-    if (defineText) strcpy(text, TextFormat("%sText", control.name));
+    if (defineText) 
+    {
+        // Skip constant text for elements with no text
+        if (control.text[0] == '\0') strcpy(text, "NULL");
+        else strcpy(text, TextFormat("%sText", control.name));
+    }
     else 
     {
         // NOTE: control.text will never be NULL
