@@ -602,6 +602,11 @@ static void WriteConstText(char *toolstr, int *pos, GuiLayout *layout, GuiLayout
             case GUI_DUMMYREC:
             case GUI_STATUSBAR:
             case GUI_LINE:
+            case GUI_PANEL:
+            case GUI_VALUEBOX:
+            case GUI_SPINNER:
+            case GUI_SCROLLPANEL:
+            case GUI_COLORPICKER:
             {
                 TextAppend(toolstr, TextFormat("const char *%sText = \"%s\";", layout->controls[i].name, layout->controls[i].text), pos);
                 if (config.fullComments)
