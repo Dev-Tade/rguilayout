@@ -601,6 +601,7 @@ static void WriteConstText(char *toolstr, int *pos, GuiLayout *layout, GuiLayout
             case GUI_LISTVIEW:
             case GUI_DUMMYREC:
             case GUI_STATUSBAR:
+            case GUI_LINE:
             {
                 TextAppend(toolstr, TextFormat("const char *%sText = \"%s\";", layout->controls[i].name, layout->controls[i].text), pos);
                 if (config.fullComments)
