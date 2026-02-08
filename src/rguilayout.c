@@ -3425,7 +3425,7 @@ int main(int argc, char *argv[])
 #if defined(CUSTOM_MODAL_DIALOGS)
                 int result = GuiFileDialog(DIALOG_MESSAGE, "#12#Load code template", customTemplateFileName, "Ok", "Custom code template\nonly available on desktop version");
 #else
-                int result = GuiFileDialog(DIALOG_OPEN_FILE, "Load code template", customTemplateFileName, "*.h;*.c", "Tracemap Image (*.h, *.c)");
+                int result = GuiFileDialog(DIALOG_OPEN_FILE, "Load code template", customTemplateFileName, "*.h;*.c", "Code Template File (*.h, *.c)");
 #endif
                 if (result == 1)
                 {
