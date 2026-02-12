@@ -1,3 +1,11 @@
+# `rGuiLayout - Enhanced`
+> **NOTE**: This is a fork of [rGuiLayout](https://github.com/raysan5/rguilayout) and contains extended functionality
+
+It includes bug fixes and custom features of my own.
+
+Bugfixes and new features are developed in separate branches, they either get merged into the `enhanced` branch or get submitted as a pull request to [rGuiLayout upstream repository](https://github.com/raysan5/rguilayout) if I consider them meaningful enough.
+
+---
 # `rGuiLayout`
 
 A simple and easy-to-use [raygui](https://github.com/raysan5/raygui) **layouts** editor.
