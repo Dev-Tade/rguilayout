@@ -207,6 +207,9 @@ ifeq ($(PLATFORM),PLATFORM_DESKTOP)
         ifeq ($(BUILD_MODE), RELEASE)
             LDFLAGS += -Wl,--subsystem,windows
         endif
+        ifeq ($(BUILD_MODE), DEBUG)
+            LDFLAGS += -Wl,--subsystem,console
+        endif
     endif
     ifeq ($(PLATFORM_OS),BSD)
         # Consider -L$(RAYLIB_INSTALL_PATH)
