@@ -5,6 +5,8 @@ It includes bug fixes and custom features of my own.
 
 Bugfixes and new features are developed in separate branches, they either get merged into the `enhanced` branch or get submitted as a pull request to [rGuiLayout upstream repository](https://github.com/raysan5/rguilayout) if I consider them meaningful enough.
 
+Checkout enhancements made at [ENHANCEMENTS.md](/ENHANCEMENTS.md)
+
 ---
 # `rGuiLayout`
 
