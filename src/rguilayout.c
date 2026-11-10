@@ -29,7 +29,7 @@
 *           > Can anchors be selected along controls?
 *           > How to register selected elements? -> Use anchor.selected/control.selected properties?
 *           > When drawing a rectangle for selection, consider partial contained elements?
-*           > When a group of elements is selected, what can we do with it? Only move? Scale?
+*           > When a group of elements is selected, what can be done with it? Only move? Scale?
 *           > Moving a group of elements, how affects anchors?
 *       - Support multiple open layouts in TABS and/or same TAB? --> Export selected controls?
 *       - Allow exporting layout as an image, including layout info as a PNG chunk?
@@ -77,8 +77,8 @@
 *       1.0  (14-May-2018)  First release
 *
 *   DEPENDENCIES:
-*       raylib 5.5-dev          - Windowing/input management and drawing
-*       raygui 4.5-dev          - Immediate-mode GUI controls with custom styling and icons
+*       raylib 6.0              - Windowing/input management and drawing
+*       raygui 5.0              - Immediate-mode GUI controls with custom styling and icons
 *       rpng 1.5                - PNG chunks management
 *       tinyfiledialogs 3.20    - Open/save file dialogs, it requires linkage with comdlg32 and ole32 libs
 *
@@ -142,9 +142,8 @@
 #define RAYGUI_GRID_ALPHA                 0.1f
 #define RAYGUI_TEXTSPLIT_MAX_ITEMS        256
 #define RAYGUI_TEXTSPLIT_MAX_TEXT_SIZE   4096
-#define RAYGUI_TOGGLEGROUP_MAX_ITEMS      256
 #define RAYGUI_IMPLEMENTATION
-#include "raygui.h"                         // Required for: IMGUI controls
+#include "external/raygui.h"                // Required for: immediate-mode gui controls
 
 #undef RAYGUI_IMPLEMENTATION                // Avoid including raygui implementation again
 
@@ -162,8 +161,8 @@
 
 #include "rguilayout.h"                     // Gui layout types definition
 
-#define GUI_PANEL_CONTROLS_PALETTE_IMPLEMENTATION
-#include "gui_panel_controls_palette.h"    // GUI: Controls Palette
+#define GUI_CONTROLS_PALETTE_IMPLEMENTATION
+#include "gui_controls_palette.h"           // GUI: Controls Palette
 
 #define CODEGEN_IMPLEMENTATION
 #include "codegen.h"                        // Code generation functions
@@ -171,6 +170,7 @@
 
 #define GUI_WINDOW_CODEGEN_IMPLEMENTATION
 #include "gui_window_codegen.h"             // GUI: Code Generation Window
+#include "font_gohufont.h"                  // Font embedded to be used by Codegen Window
 
 // raygui embedded styles
 // NOTE: Included in the same order as selector
@@ -307,7 +307,7 @@ int main(int argc, char *argv[])
             return 0;
         }
     }
-#endif  // PLATFORM_DESKTOP
+#endif // PLATFORM_DESKTOP
 #if (!defined(_DEBUG) && (defined(WIN32) || defined(_WIN32) || defined(__WIN32) && !defined(__CYGWIN__)))
     // WARNING (Windows): If program is compiled as Window application (instead of console),
     // no console is available to show output info... solution is compiling a console application
@@ -323,6 +323,7 @@ int main(int argc, char *argv[])
     SetConfigFlags(FLAG_WINDOW_RESIZABLE);  // Window configuration flags
     InitWindow(screenWidth, screenHeight, TextFormat("%s v%s | %s", toolName, toolVersion, toolDescription));
     SetWindowMinSize(1280, 720);
+    EnableEventWaiting();
     SetExitKey(0);
 
     // Code font generation for embedding
@@ -477,8 +478,8 @@ int main(int argc, char *argv[])
     for (int i = 0; i < MAX_ICONS_AVAILABLE; i++)
     {
         // NOTE: Every icon requires 6 text characters: "#001#;"
-        if ((i + 1)%16 == 0) strncpy(toggleIconsText + 6*i, TextFormat("#%03i#\n", i), 6);
-        else strncpy(toggleIconsText + 6*i, TextFormat("#%03i#;", i), 6);
+        if ((i + 1)%16 == 0) memcpy(toggleIconsText + 6*i, TextFormat("#%03i#\n", i), 6);
+        else memcpy(toggleIconsText + 6*i, TextFormat("#%03i#;", i), 6);
     }
 
     toggleIconsText[MAX_ICONS_AVAILABLE*6 - 1] = '\0';
@@ -524,21 +525,28 @@ int main(int argc, char *argv[])
 
     // GUI: Controls Selection Palette
     //-----------------------------------------------------------------------------------
-    GuiPanelControlsPaletteState windowControlsPaletteState = InitGuiPanelControlsPalette();
+    GuiControlsPaletteState controlsPaletteState = GUI_CONTROLS_PALETTE_STATE_DEFAULT;
+    controlsPaletteState.panelActive = true;
+    strcpy((char *)controlsPaletteState.textBoxText, "TextBox");
+
+    Rectangle controlsPaletteBounds = { 0 };
 
     // Rectangles used on controls preview drawing, copied from palette
-    // NOTE: [x, y] position is set on mouse movement and considering snap mode
-    Rectangle defaultRec[CONTROLS_PALETTE_COUNT] = { 0 };
-    for (int i = 0; i < CONTROLS_PALETTE_COUNT; i++)
-    {
-        defaultRec[i].width = windowControlsPaletteState.controlRecs[i].width;
-        defaultRec[i].height = windowControlsPaletteState.controlRecs[i].height;
-    }
+    // NOTE 1: [x, y] position is set on mouse movement and considering snap mode
+    // NOTE 2: Recalculated after GuiControlsPalette(), in case bounds change 
+    Rectangle defaultRec[GUI_CONTROLS_PALETTE_COUNT] = { 0 };
     //-----------------------------------------------------------------------------------
 
     // GUI: Layout Code Generation Window
     //-----------------------------------------------------------------------------------
-    GuiWindowCodegenState windowCodegenState = InitGuiWindowCodegen();
+    GuiWindowCodegenState windowCodegenState = { 0 };
+
+    strcpy(windowCodegenState.toolNameText, "layout_name");
+    strcpy(windowCodegenState.toolVersionText, "1.0.0");
+    strcpy(windowCodegenState.companyText, "raylib technologies");
+    strcpy(windowCodegenState.toolDescriptionText, "Tool Description");
+
+    windowCodegenState.codeFont = LoadFont_Gohufont(); // Load font embedded (font_gohufont.h)
     //-----------------------------------------------------------------------------------
 
     // GUI: Exit Window
@@ -573,7 +581,7 @@ int main(int argc, char *argv[])
         // Load required config variables
         // NOTE: Keys not found default to 0 value, unless fallback is requested
         //windowAboutState.showSplash = rini_get_value(config, "SHOW_WINDOW_WELCOME");
-        mainToolbarState.showControlPanelActive = rini_get_value(appConfig, "SHOW_WINDOW_CONTROLS");
+        //mainToolbarState.showControlPanelActive = rini_get_value(appConfig, "SHOW_WINDOW_CONTROLS");
         mainToolbarState.showTooltips = rini_get_value_fallback(appConfig, "SHOW_CONTROL_TOOLTIPS", 1); // Default to 1 if key not found
         mainToolbarState.showGridActive = rini_get_value(appConfig, "SHOW_IMAGE_GRID");
         gridSpacing = rini_get_value(appConfig, "GRID_LINES_SPACING");
@@ -601,7 +609,7 @@ int main(int argc, char *argv[])
     //--------------------------------------------------------------------------------------
 
     // Main game loop
-    while (!closeWindow)    // Detect window close button
+    while (!closeWindow)    // Program must finish
     {
         // Basic program flow logic
         //----------------------------------------------------------------------------------
@@ -834,7 +842,7 @@ int main(int argc, char *argv[])
         // Show closing window on ESC
         if (IsKeyPressed(KEY_ESCAPE))
         {
-            if (textEditMode)       // Cancel text edit mode
+            if (textEditMode) // Cancel text edit mode
             {
                 textEditMode = false;
                 showIconPanel = false;
@@ -844,7 +852,7 @@ int main(int argc, char *argv[])
                     strcpy(layout->controls[selectedControl].text, prevText);
                 }
             }
-            else if (nameEditMode)  // Cancel name edit mode
+            else if (nameEditMode) // Cancel name edit mode
             {
                 nameEditMode = false;
                 if (selectedControl != -1)
@@ -958,12 +966,6 @@ int main(int argc, char *argv[])
 
         // Main toolbar logic
         //----------------------------------------------------------------------------------
-        windowControlsPaletteState.panelActive = mainToolbarState.showControlPanelActive;
-
-        //styleFrameCounter++;
-        //if ((styleFrameCounter%120) == 0) mainToolbarState.visualStyleActive++;
-        //if (mainToolbarState.visualStyleActive > 11) mainToolbarState.visualStyleActive = 0;
-
         // Visual options logic
         if (mainToolbarState.visualStyleActive != mainToolbarState.prevVisualStyleActive)
         {
@@ -1058,14 +1060,14 @@ int main(int argc, char *argv[])
 
             // Palette selected control logic
             //----------------------------------------------------------------------------------------------
-            if (!CheckCollisionPointRec(mouse, windowControlsPaletteState.panelBounds))
+            if (!CheckCollisionPointRec(mouse, controlsPaletteBounds))
             {
-                if (focusedControl == -1) windowControlsPaletteState.selectedControl -= GetMouseWheelMove();
+                if (focusedControl == -1) controlsPaletteState.selectedControl -= GetMouseWheelMove();
 
-                if (windowControlsPaletteState.selectedControl < GUI_WINDOWBOX) windowControlsPaletteState.selectedControl = GUI_WINDOWBOX;
-                else if (windowControlsPaletteState.selectedControl > GUI_DUMMYREC) windowControlsPaletteState.selectedControl = GUI_DUMMYREC;
+                if (controlsPaletteState.selectedControl < GUI_WINDOWBOX) controlsPaletteState.selectedControl = GUI_WINDOWBOX;
+                else if (controlsPaletteState.selectedControl > GUI_DUMMYREC) controlsPaletteState.selectedControl = GUI_DUMMYREC;
 
-                selectedType = windowControlsPaletteState.selectedControl;
+                selectedType = controlsPaletteState.selectedControl;
             }
             //----------------------------------------------------------------------------------------------
 
@@ -1088,7 +1090,7 @@ int main(int argc, char *argv[])
 
             // Check mouse is in the "work screen area" and not on toolbars/panels
             if (CheckCollisionPointRec(mouse, (Rectangle){ 0, 40, GetScreenWidth(), GetScreenHeight() - 64 }) &&
-                !CheckCollisionPointRec(mouse, windowControlsPaletteState.panelBounds))
+                !CheckCollisionPointRec(mouse, controlsPaletteBounds))
             {
                 if (!dragMoveMode)
                 {
@@ -1300,7 +1302,7 @@ int main(int argc, char *argv[])
                     //--------------------------------------------------------------------------
                     Rectangle rec = layout->controls[selectedControl].rec;
 
-                    // NOTE: We must consider anchor offset!
+                    // NOTE: Anchor offset must be considered
                     if (layout->controls[selectedControl].ap->id > 0)
                     {
                         rec.x += layout->controls[selectedControl].ap->x;
@@ -1329,7 +1331,7 @@ int main(int argc, char *argv[])
                         if ((layout->controls[selectedControl].type == GUI_WINDOWBOX) &&
                             (rec.height < RAYGUI_WINDOWBOX_STATUSBAR_HEIGHT*2)) rec.height = RAYGUI_WINDOWBOX_STATUSBAR_HEIGHT*2;
 
-                        // NOTE: We must consider anchor offset!
+                        // NOTE: Anchor offset must be considered
                         if (layout->controls[selectedControl].ap->id > 0)
                         {
                             rec.x -= layout->controls[selectedControl].ap->x;
@@ -1632,7 +1634,7 @@ int main(int argc, char *argv[])
                     for (int i = 0; i < layout->controlCount; i++)
                     {
                         // TODO: Check if full control rec is contained in multiSelectRec
-                        // WARNING: multiSelectRec is in screen-space, we must consider rec, anchor and refWindow!
+                        // WARNING: multiSelectRec is in screen-space, rec must be considered, anchor and refWindow!
                         if (CheckCollisionRecs(multiSelectRec, layout->controls[i].rec))
                         {
                             multiSelectControls[multiSelectCount] = i;
@@ -1690,7 +1692,7 @@ int main(int argc, char *argv[])
 
                     layout->controlCount--;
 
-                    // As we moved all controls one position, we need to update selected
+                    // As all controls are moved one position, need to update selected
                     // controls position for next control deletion
                     for (int i = 0; i < multiSelectCount; i++) multiSelectControls[i] -= 1;
                 }
@@ -1717,7 +1719,7 @@ int main(int argc, char *argv[])
                 {
                     if (layout->anchors[i].enabled)
                     {
-                        // Checks if mouse is over an anchor
+                        // Check if mouse is over an anchor
                         if (CheckCollisionPointCircle(mouse, (Vector2){ layout->anchors[i].x, layout->anchors[i].y }, ANCHOR_RADIUS))
                         {
                             focusedAnchor = i;
@@ -1772,7 +1774,7 @@ int main(int argc, char *argv[])
                 {
                     if (refWindowEditMode)
                     {
-                        // NOTE: In the case of ref-window, we don't link to controls, just define size
+                        // NOTE: In the case of ref-window, just define size
                         layout->refWindow.width = mouse.x - layout->refWindow.x;
                         layout->refWindow.height = mouse.y  - layout->refWindow.y;
 
@@ -1794,7 +1796,7 @@ int main(int argc, char *argv[])
                             {
                                 for (int i = 0; i < layout->controlCount; i++)
                                 {
-                                    if (layout->controls[i].ap->id == MAX_ANCHOR_POINTS)    // Auxiliar anchor id
+                                    if (layout->controls[i].ap->id == MAX_ANCHOR_POINTS) // Auxiliar anchor id
                                     {
                                         if (layout->controls[i].ap->id > 0)
                                         {
@@ -1842,7 +1844,7 @@ int main(int argc, char *argv[])
                                 {
                                     for (int i = 0; i < layout->controlCount; i++)
                                     {
-                                        if (layout->controls[i].ap->id == MAX_ANCHOR_POINTS)  // Auxiliar anchor id
+                                        if (layout->controls[i].ap->id == MAX_ANCHOR_POINTS) // Auxiliar anchor id
                                         {
                                             layout->controls[i].rec.x += layout->controls[i].ap->x;
                                             layout->controls[i].rec.y += layout->controls[i].ap->y;
@@ -2154,7 +2156,6 @@ int main(int argc, char *argv[])
                             //------------------------------------------------------------------
 
                             // Change tracemap alpha
-                            // TODO: Expose tracemap alpha config in a visual way
                             if (IsKeyDown(KEY_RIGHT_ALT))
                             {
                                 if (IsKeyDown(KEY_O)) tracemap.alpha += 0.05f;
@@ -2385,7 +2386,7 @@ int main(int argc, char *argv[])
             {
                 if (layout->anchors[i].enabled)
                 {
-                    if (i == 0)    // Reference anchor
+                    if (i == 0) // Reference anchor
                     {
                         Color colAnchor = colAnchor0;
 
@@ -2394,7 +2395,7 @@ int main(int argc, char *argv[])
                         DrawRectangle(layout->anchors[0].x - ANCHOR_RADIUS - 5, layout->anchors[0].y, ANCHOR_RADIUS*2 + 10, 1, Fade(colAnchor, 0.8f));
                         DrawRectangle(layout->anchors[0].x, layout->anchors[0].y - ANCHOR_RADIUS - 5, 1, ANCHOR_RADIUS*2 + 10, Fade(colAnchor, 0.8f));
                     }
-                    else    // Regular anchors
+                    else // Regular anchors
                     {
                         // Logic to properly choose colors
                         Color colAnchor = colAnchorDefault;
@@ -2508,7 +2509,7 @@ int main(int argc, char *argv[])
                 // Control selected from panel drawing
                 // NOTE: It uses default control rectangle for selected type
                 if (CheckCollisionPointRec(mouse, (Rectangle){ 0, 40, (float)GetScreenWidth(), (float)GetScreenHeight() - 64 }) &&
-                    !CheckCollisionPointRec(mouse, windowControlsPaletteState.panelBounds))
+                    !CheckCollisionPointRec(mouse, controlsPaletteBounds))
                 {
                     if ((focusedAnchor == -1) && (focusedControl == -1) && !tracemap.focused && !refWindowEditMode && !multiSelectMode)
                     {
@@ -2827,7 +2828,7 @@ int main(int argc, char *argv[])
                 {
                     Rectangle rec = layout->controls[selectedControl].rec;
 
-                    // NOTE: We must consider anchor offset!
+                    // NOTE: Anchor offset must be considered
                     if (layout->controls[selectedControl].ap->id > 0)
                     {
                         rec.x += layout->controls[selectedControl].ap->x;
@@ -2919,9 +2920,17 @@ int main(int argc, char *argv[])
             // GUI: Controls Selection Palette
             // NOTE: It uses GuiLock() to lock controls behaviour and just limit them to selection
             //----------------------------------------------------------------------------------------
-            GuiPanelControlsPalette(&windowControlsPaletteState);
+            controlsPaletteBounds = (Rectangle){ GetScreenWidth() - 168, 40, ((GetScreenHeight() - 64) < (944 + 12))? 170 : 158, GetScreenHeight() - 24 - 40 + 2 };
+            GuiControlsPalette(controlsPaletteBounds, "#101#Controls Palette", &controlsPaletteState);
 
-            mainToolbarState.showControlPanelActive = windowControlsPaletteState.panelActive;
+            // NOTE: Recalculate default control rectangle size, in case bounds changed
+            for (int i = 0; i < GUI_CONTROLS_PALETTE_COUNT; i++)
+            {
+                defaultRec[i].width = controlsPaletteState.controlRecs[i].width;
+                defaultRec[i].height = controlsPaletteState.controlRecs[i].height;
+            }
+
+            //mainToolbarState.showControlPanelActive = controlsPaletteState.panelActive;
 
             if (showWindowActive) GuiLock();
             else GuiUnlock();
@@ -3163,7 +3172,7 @@ int main(int argc, char *argv[])
             //----------------------------------------------------------------------------------------
 
             // NOTE: If some overlap window is open and main window is locked, draw a background rectangle
-            //if (GuiIsLocked())    // WARNING: It takes one extra frame to process, so we just check required conditions
+            //if (GuiIsLocked()) // WARNING: It takes one extra frame to process, so just checking required conditions
             if (windowHelpState.windowActive ||
                 windowAboutState.windowActive ||
                 windowCodegenState.windowActive ||
@@ -3198,21 +3207,23 @@ int main(int argc, char *argv[])
             if (showIssueReportWindow)
             {
                 Rectangle messageBox = { (float)GetScreenWidth()/2 - 300/2, (float)GetScreenHeight()/2 - 190/2 - 20, 300, 190 };
-                int result = GuiMessageBox(messageBox, "#220#Report Issue",
-                    "Do you want to report any issue or\nfeature request for this program?\n\ngithub.com/raysan5/rguilayout", "#186#Report on GitHub");
+                int btnActive = -1;
+                GuiMessageBox(messageBox, "#220#Report Issue",
+                    "Do you want to report any issue or\nfeature request for this program?\n\ngithub.com/raysan5/rguilayout", "#186#Report on GitHub", &btnActive);
 
-                if (result == 1)    // Report issue pressed
+                if (btnActive == 1)    // Report issue pressed
                 {
                     OpenURL("https://github.com/raysan5/rguilayout/issues");
                     showIssueReportWindow = false;
                 }
-                else if (result == 0) showIssueReportWindow = false;
+                else if (btnActive == 0) showIssueReportWindow = false;
             }
             //----------------------------------------------------------------------------------------
 
             // GUI: Layout Code Generation Window
             //----------------------------------------------------------------------------------------
-            GuiWindowCodegen(&windowCodegenState);
+            GuiWindowCodegen((Rectangle){ GetScreenWidth()/2.0f - 1024/2, GetScreenHeight()/2.0f - 640/2, 1024, 640 }, 
+                "#7#Code Generation Window", &windowCodegenState);
 
             if (windowCodegenState.btnLoadCustomTemplatePressed)
             {
@@ -3240,17 +3251,19 @@ int main(int argc, char *argv[])
             //----------------------------------------------------------------------------------------
             if (showResetWindow)
             {
-                int message = GuiMessageBox((Rectangle){ GetScreenWidth()/2 - 320/2, GetScreenHeight()/2 - 120/2, 320, 120 }, "#8# Creating new layout", "Do you want to save the current layout?", "Yes;No");
+                int btnActive = -1;
+                GuiMessageBox((Rectangle){ GetScreenWidth()/2 - 320/2, GetScreenHeight()/2 - 120/2, 320, 120 },
+                    "#8# Creating new layout", "Do you want to save the current layout?", "#112#Yes;#113#No", &btnActive);
 
-                if (message == 0) showResetWindow = false;
-                else if (message == 1)  // Yes
+                if (btnActive == 0) showResetWindow = false;
+                else if (btnActive == 1) // Yes
                 {
                     strcpy(outFileName, "layout_name.rgl");
                     showSaveFileDialog = true;
                     showResetWindow = false;
                     resetLayout = true;
                 }
-                else if (message == 2)  // No
+                else if (btnActive == 2) // No
                 {
                     showResetWindow = false;
                     resetLayout = true;
@@ -3262,11 +3275,13 @@ int main(int argc, char *argv[])
             //----------------------------------------------------------------------------------------
             if (showExitWindow)
             {
-                int result = GuiMessageBox((Rectangle){ GetScreenWidth()/2 - 320/2, GetScreenHeight()/2 - 120/2, 320, 120 }, "#159#Closing rGuiLayout", "Do you want to close without saving?", "Yes;No");
+                int btnActive = -1;
+                GuiMessageBox((Rectangle){ GetScreenWidth()/2 - 320/2, GetScreenHeight()/2 - 120/2, 320, 120 },
+                    "#159#Closing rGuiLayout", "Do you want to close without saving?", "#112#Yes;#113#No", &btnActive);
 
-                if (result == 0) showExitWindow = false;
-                else if (result == 1) closeWindow = true;
-                else if (result == 2)
+                if (btnActive == 0) showExitWindow = false;
+                else if (btnActive == 1) closeWindow = true;
+                else if (btnActive == 2)
                 {
                     strcpy(outFileName, "layout_name.rgl");
                     showSaveFileDialog = true;
@@ -3319,7 +3334,9 @@ int main(int argc, char *argv[])
             {
 #if defined(CUSTOM_MODAL_DIALOGS)
                 int result = GuiFileDialog(DIALOG_TEXTINPUT, "#6#Save raygui layout file...", outFileName, "Ok;Cancel", NULL);
-                //int result = GuiTextInputBox((Rectangle){ screenWidth/2 - 280/2, screenHeight/2 - 112/2 - 30, 280, 112 }, "#2#Save raygui style file...", NULL, "#2#Save", outFileName, 512, NULL);
+                //int btnActive = -1;
+                //GuiTextInputBox((Rectangle){ screenWidth/2 - 280/2, screenHeight/2 - 112/2 - 30, 280, 112 },
+                //  "#2#Save raygui style file...", NULL, outFileName, 512, "#2#Save", &btnActive, NULL);
 #else
                 int result = GuiFileDialog(DIALOG_SAVE_FILE, "Save raygui layout file...", outFileName, "*.rgl", "raygui Layout Files (*.rgl)");
 #endif
@@ -3341,7 +3358,7 @@ int main(int argc, char *argv[])
 
                 #if defined(PLATFORM_WEB)
                     // Download file from MEMFS (emscripten memory filesystem)
-                    // NOTE: Second argument must be a simple filename (we can't use directories)
+                    // NOTE: Second argument must be a simple filename (can't use directories)
                     // NOTE: Included security check to (partially) avoid malicious code on PLATFORM_WEB
                     if (strchr(outFileName, '\'') == NULL) emscripten_run_script(TextFormat("saveFileFromMEMFSToDisk('%s','%s')", outFileName, GetFileName(outFileName)));
                 #endif
@@ -3377,7 +3394,7 @@ int main(int argc, char *argv[])
 
                 #if defined(PLATFORM_WEB)
                     // Download file from MEMFS (emscripten memory filesystem)
-                    // NOTE: Second argument must be a simple filename (we can't use directories)
+                    // NOTE: Second argument must be a simple filename (can't use directories)
                     // NOTE: Included security check to (partially) avoid malicious code on PLATFORM_WEB
                     if (strchr(outFileName, '\'') == NULL) emscripten_run_script(TextFormat("saveFileFromMEMFSToDisk('%s','%s')", outFileName, GetFileName(outFileName)));
                 #endif
@@ -3465,15 +3482,15 @@ int main(int argc, char *argv[])
     windowMaximized = (int)IsWindowMaximized();
 
     // Define header comment lines
-    rini_set_comment_line(&appConfig, NULL);   // Empty comment line, but including comment prefix delimiter
-    rini_set_comment_line(&appConfig, TextFormat("%s initialization configuration options", TOOL_NAME));
-    rini_set_comment_line(&appConfig, NULL);
-    rini_set_comment_line(&appConfig, "NOTE: This file is loaded at application startup,");
-    rini_set_comment_line(&appConfig, "if file is not found, default values are applied");
-    rini_set_comment_line(&appConfig, NULL);
+    rini_set_comment_line(&appConfig, " ");   // Empty comment line, but including comment prefix delimiter
+    rini_set_comment_line(&appConfig, TextFormat(" %s initialization configuration options", TOOL_NAME));
+    rini_set_comment_line(&appConfig, " ");
+    rini_set_comment_line(&appConfig, " NOTE: This file is loaded at application startup,");
+    rini_set_comment_line(&appConfig, " if file is not found, default values are applied");
+    rini_set_comment_line(&appConfig, " ");
 
     //rini_set_value(&config, "SHOW_WINDOW_WELCOME", (int)windowAboutState.showSplash, "Show welcome window at initialization");
-    rini_set_value(&appConfig, "SHOW_WINDOW_INFO", (int)mainToolbarState.showControlPanelActive, "Show control panel");
+    //rini_set_value(&appConfig, "SHOW_WINDOW_INFO", (int)mainToolbarState.showControlPanelActive, "Show control panel");
     rini_set_value(&appConfig, "SHOW_CONTROL_TOOLTIPS", (int)mainToolbarState.showTooltips, "Show controls tooltips on mouse hover");
     rini_set_value(&appConfig, "INIT_WINDOW_MAXIMIZED", (int)windowMaximized, "Initialize window maximized");
     rini_set_value(&appConfig, "SHOW_IMAGE_GRID", (int)mainToolbarState.showGridActive, "Show image grid");
@@ -3522,6 +3539,13 @@ static void ShowCommandLineInfo(void)
     printf("                                      Supported extensions: .c, .h\n");
     printf("    -t, --template <filename.ext>   : Define code template for output.\n");
     printf("                                      Supported extensions: .c, .h\n\n");
+    printf("    -n, --name <value>              : Define the output name.\n");
+    printf("    -v, --version <value>           : Define the version.\n");
+    printf("    -c, --company <value>           : Define the company.\n");
+    printf("    -d, --description <value>       : Define the description.\n");
+    printf("        --no-anchors                : Do not export anchors.\n");
+    printf("        --rectangles                : Export rectangles.\n");
+    printf("        --no-comments               : Do not export full comments.\n");
 
     printf("\nEXAMPLES:\n\n");
     printf("    > rguilayout --input mytool.rgl --output mytools.h\n");
@@ -3536,6 +3560,14 @@ static void ProcessCommandLine(int argc, char *argv[])
     char templateFile[512] = { 0 };     // Template file name
 
     //int outputFormat = 0;               // Supported output formats
+
+    const char *cliName = NULL;
+    const char *cliVersion = NULL;
+    const char *cliCompany = NULL;
+    const char *cliDescription = NULL;
+    bool cliNoAnchors = false;
+    bool cliRecs = false;
+    bool cliNoComments = false;
 
     // Process command line arguments
     for (int i = 1; i < argc; i++)
@@ -3589,8 +3621,50 @@ static void ProcessCommandLine(int argc, char *argv[])
             }
             else LOG("WARNING: No template file provided\n");
         }
-
-        // TODO: CLI: Support codegen options: exportAnchors, defineRecs, fullComments...
+        else if ((strcmp(argv[i], "-n") == 0) || (strcmp(argv[i], "--name") == 0))
+        {
+            if (((i + 1) < argc) && (argv[i + 1][0] != '-'))
+            {
+                cliName = argv[i + 1];
+                i++;
+            }
+        }
+        else if ((strcmp(argv[i], "-v") == 0) || (strcmp(argv[i], "--version") == 0))
+        {
+            if (((i + 1) < argc) && (argv[i + 1][0] != '-'))
+            {
+                cliVersion = argv[i + 1];
+                i++;
+            }
+        }
+        else if ((strcmp(argv[i], "-c") == 0) || (strcmp(argv[i], "--company") == 0))
+        {
+            if (((i + 1) < argc) && (argv[i + 1][0] != '-'))
+            {
+                cliCompany = argv[i + 1];
+                i++;
+            }
+        }
+        else if ((strcmp(argv[i], "-d") == 0) || (strcmp(argv[i], "--description") == 0))
+        {
+            if (((i + 1) < argc) && (argv[i + 1][0] != '-'))
+            {
+                cliDescription = argv[i + 1];
+                i++;
+            }
+        }
+        else if ((strcmp(argv[i], "--no-anchors") == 0))
+        {
+            cliNoAnchors = true;
+        }
+        else if ((strcmp(argv[i], "--rectangles") == 0))
+        {
+            cliRecs = true;
+        }
+        else if ((strcmp(argv[i], "--no-comments") == 0))
+        {
+            cliNoComments = true;
+        }
     }
 
     // Process input file
@@ -3607,13 +3681,13 @@ static void ProcessCommandLine(int argc, char *argv[])
 
         GuiLayoutConfig guiConfig = { 0 };
         memset(&guiConfig, 0, sizeof(GuiLayoutConfig));
-        strcpy(guiConfig.name, "window_codegen");
-        strcpy(guiConfig.version, toolVersion);
-        strcpy(guiConfig.company, "raylib technologies");
-        strcpy(guiConfig.description, "tool description");
-        guiConfig.exportAnchors = true;
-        guiConfig.defineRecs = false;
-        guiConfig.fullComments = true;
+        strcpy(guiConfig.name, cliName ? cliName : "window_codegen");
+        strcpy(guiConfig.version, cliVersion ? cliVersion : toolVersion);
+        strcpy(guiConfig.company, cliCompany ? cliCompany : "raylib technologies");
+        strcpy(guiConfig.description, cliDescription ? cliDescription : "tool description");
+        guiConfig.exportAnchors = !cliNoAnchors;
+        guiConfig.defineRecs = cliRecs;
+        guiConfig.fullComments = !cliNoComments;
 
         // Generate C code for gui layout->controls
         char *guiTemplateCustom = NULL;
@@ -3637,7 +3711,7 @@ static void ProcessCommandLine(int argc, char *argv[])
 
     if (showUsageInfo) ShowCommandLineInfo();
 }
-#endif      // PLATFORM_DESKTOP
+#endif // PLATFORM_DESKTOP
 
 //--------------------------------------------------------------------------------------------
 // Load/Save/Export data functions
@@ -3648,9 +3722,9 @@ static GuiLayout *LoadLayout(const char *fileName)
 {
     GuiLayout *layout = (GuiLayout *)RL_CALLOC(1, sizeof(GuiLayout));
 
-    ResetLayout(layout);    // Init some default values
+    ResetLayout(layout); // Init some default values
 
-    if (fileName != NULL)   // Try loading text layout file
+    if (fileName != NULL) // Try loading text layout file
     {
         FILE *rglFile = fopen(fileName, "rt");
 
@@ -3958,7 +4032,7 @@ static void SaveLayout(GuiLayout *layout, const char *fileName)
 }
 
 /*
-// Check if a rectangle is contained within another
+// Check if rectangle is contained within another
 static bool IsRecContainedInRec(Rectangle container, Rectangle rec)
 {
     bool result = false;
